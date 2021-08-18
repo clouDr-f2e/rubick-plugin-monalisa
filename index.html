@@ -92,8 +92,9 @@
 
     // fetch ui pictures from lanhu
     async getLanhuImages(pid) {
+      let pData = {}
       try {
-        const pData = await axios({
+        pData = await axios({
           method: 'get',
           url: API_LANHU_PROJECT_INFO,
           params: {
@@ -180,6 +181,9 @@
       }
       setTimeout(() => {
         this.coreData.webUrl = this.coreData.preWebUrl
+        if (!this.coreData.preWebUrl) {
+          this.removeUiPic()
+        }
       }, 0)
     },
 
@@ -443,7 +447,7 @@
         :src="coreData.webUrl"
       ></iframe>
       <div class="placeholder" v-else>
-        no data
+        <img src="https://user-images.githubusercontent.com/30930659/129876119-d295f3a2-725f-4afc-b857-eaf813baa282.png" alt="">
       </div>
       <div
         v-if="coreData.uiPicUrl"
