@@ -1,0 +1,578 @@
+<link rel="stylesheet" href="./css/common.css"/>
+<link rel="stylesheet" href="./css/index.css"/>
+<script src="https://cdn.bootcdn.net/ajax/libs/axios/0.21.1/axios.min.js"></script>
+<script type="module">
+  import { createApp } from 'https://unpkg.com/petite-vue?module'
+
+  const DB_KEY = 'monalisa_lanhudata'
+  const API_LANHU_LOGIN = 'https://lanhuapp.com/api/account/login'
+  const API_LANHU_PROJECT_INFO = 'https://lanhuapp.com/api/project/project_info'
+  const ROUTE_NAME = {
+    account: 'account',
+    choose: 'choose',
+    core: 'core'
+  }
+
+  createApp({
+    ROUTE_NAME,
+    visibility: ROUTE_NAME.core,
+    lanhuData: {
+      email: '',
+      password: '',
+      pid: '',
+      projectName: '',
+      images: [],
+      select: {
+        name: '',
+        url: ''
+      }
+    },
+    coreData: {
+      webUrl: '',
+      preWebUrl: '',
+      uiPicUrl: '',
+      uiPicName: '',
+      uiPicOrigin: 'self', // self:自己上传 lanhu:蓝湖选择
+      uiPicWidth: 0,
+      uiPicHeight: 0,
+      uiPicOpacity: 78,
+      uiPicVisible: false,
+      uiPicStatusBarHeight: 40,
+      uiPicMaskTop: 0,
+      chromePath: '',
+      score: '',
+      scoreDesc: '',
+      resultPicUrl: ''
+    },
+
+    onMounted() {
+      rubick.setExpendHeight(778)
+      this.setupRouting()
+      this.bindKeyboardEvent()
+      this.coreData.chromePath = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
+    },
+
+    // routing setup
+    setupRouting() {
+      const onHashChange = () => {
+        var visibility = window.location.hash.replace(/#\/?/, '')
+        if (ROUTE_NAME[visibility]) {
+          this.visibility = visibility
+        } else {
+          window.location.hash = ''
+          this.visibility = ROUTE_NAME.core
+        }
+      }
+      window.addEventListener('hashchange', onHashChange)
+      onHashChange()
+    },
+
+    bindKeyboardEvent() {
+      document.addEventListener('keydown', (e) => {
+        this.onKeyDown(e)
+      })
+    },
+
+    onKeyDown(e) {
+      const { uiPicUrl, uiPicVisible } = this.coreData
+      if (!uiPicUrl || !uiPicVisible) {
+        return
+      }
+      const keyCode = e.code
+      const shiftKey = e.shiftKey
+      const shiftAndUp = shiftKey && keyCode === 'ArrowUp'
+      const shiftAndDown = shiftKey && keyCode === 'ArrowDown'
+      if (shiftAndUp) {
+        this.coreData.uiPicMaskTop -= 1
+      }
+      if (shiftAndDown) {
+        this.coreData.uiPicMaskTop += 1
+      }
+    },
+
+    // fetch ui pictures from lanhu
+    async getLanhuImages(pid) {
+      try {
+        const pData = await axios({
+          method: 'get',
+          url: API_LANHU_PROJECT_INFO,
+          params: {
+            pid: pid,
+            pageNo: 1,
+            pageSize: 100
+          }
+        })
+        console.log('projectInfoResult: ', pData)
+      } catch (err) {
+        throw rubick.showNotification(err.message)
+      }
+      let projectImages = []
+      let projectName = ''
+      if (pData && pData.status === 200 && pData.data && pData.data.result && pData.data.result.images) {
+        const { images = [], name = '' } = pData.data.result
+        projectImages = images
+        projectName = name
+      }
+      this.lanhuData.images = projectImages.filter(item => !!item.url)
+      this.lanhuData.projectName = projectName
+    },
+
+    getLanhuDataFromDB() {
+      const lanhuData = rubick.db.get(DB_KEY)
+      if (lanhuData && lanhuData.data) {
+        const {
+          email = '',
+          password = '',
+          pid = ''
+        } = JSON.parse(lanhuData.data)
+        this.lanhuData.email = email
+        this.lanhuData.password = password
+        this.lanhuData.pid = pid
+      }
+    },
+
+    async loginLanhu() {
+      const { email, password, pid } = this.lanhuData
+      if (!email) return rubick.showNotification('账号不能为空')
+      if (!password) return rubick.showNotification('密码不能为空')
+      if (!pid) return rubick.showNotification('蓝湖pid不能为空')
+
+      let realPid = ''
+      try {
+        const arr = pid.split('?')[1].split('&')
+        arr.forEach(item => {
+          if (item.startsWith('pid')) {
+            realPid = item.split('=')[1]
+          }
+        })
+      } catch (err) {}
+
+      try {
+        const res = await axios({
+          method: 'post',
+          url: API_LANHU_LOGIN,
+          data: {
+            email,
+            password
+          }
+        });
+        console.log('loginResult: ', res)
+      } catch (err) {
+        throw rubick.showNotification(err.message)
+      }
+
+      const projectId = realPid || pid
+      this.lanhuData.email = email
+      this.lanhuData.password = password
+      this.lanhuData.pid = projectId
+      rubick.db.put({
+        _id: DB_KEY,
+        data: JSON.stringify({ email, password, pid: projectId })
+      })
+      await this.getLanhuImages(projectId)
+      window.location.hash = ROUTE_NAME.choose
+    },
+
+    changeWebUrl() {
+      this.coreData.webUrl = ''
+      if (!/^http/.test(this.coreData.preWebUrl) && this.coreData.preWebUrl) {
+        this.coreData.preWebUrl = 'http://' + this.coreData.preWebUrl
+      }
+      setTimeout(() => {
+        this.coreData.webUrl = this.coreData.preWebUrl
+      }, 0)
+    },
+
+    bindDrag(el) {
+      el.onmousedown = (e) => {
+        const disY = e.clientY - el.offsetTop;
+        e.stopPropagation();
+        document.onmousemove = (e) => {
+          const top = e.clientY - disY
+          el.style.top = top + 'px'
+          this.coreData.uiPicMaskTop = top
+        };
+        document.onmouseup = function () {
+          document.onmousemove = null
+        };
+        return false;
+      };
+    },
+
+    unBindDrag(el) {
+      document.onmousemove = null
+      document.onmouseup = null
+      el.onmousedown = null
+    },
+
+    fileChange(event) {
+      if (!event.target.files || !event.target.files.length) {
+        return
+      }
+      const file = event.target.files[0]
+      if (!/\.png$/i.test(file.name)) {
+        return rubick.showNotification('请选择png格式的图片')
+      }
+      this.coreData.uiPicName = file.name
+      const reader = new FileReader()
+      reader.readAsDataURL(file);
+      reader.onload = async (e) => {
+        this.coreData.uiPicMaskTop = 0
+        this.coreData.uiPicUrl = e.target.result
+        this.coreData.uiPicVisible = true
+        this.coreData.uiPicMaskTop = this.coreData.uiPicMaskTop - (this.coreData.uiPicStatusBarHeight / 2)
+        await this.runTest(this.coreData.uiPicUrl)
+      }
+      return false
+    },
+
+    async chooseUiPicOrigin(origin) {
+      this.coreData.uiPicOrigin = origin
+      await this.sleep(200)
+      if (origin === 'lanhu') {
+        this.getLanhuDataFromDB()
+        window.location.hash = ROUTE_NAME.account
+      }
+    },
+
+    async onUiPicChoose(pic) {
+      const { name, url } = pic
+      this.lanhuData.select = {
+        name,
+        url
+      }
+      try {
+        const uiPicUrl = await this.genUiPicBase64Url(pic)
+        this.coreData.uiPicMaskTop = 0
+        this.coreData.uiPicUrl = uiPicUrl
+        this.coreData.uiPicMaskTop = this.coreData.uiPicMaskTop - (this.coreData.uiPicStatusBarHeight / 2)
+        this.coreData.uiPicName = pic.name
+        this.coreData.uiPicVisible = true
+        this.runTest(this.coreData.uiPicUrl)
+      } catch (e) {
+        console.log(e)
+      }
+      window.history.go(-2)
+    },
+
+    genUiPicBase64Url(pic) {
+      const { url } = pic
+      return new Promise((resolve, reject) => {
+        const img = new Image()
+        img.crossorigin = 'anonymous'
+        img.onload = () => {
+          const { width, height } = img
+          const canvas = document.createElement('canvas')
+          canvas.width = width
+          canvas.height = height
+          canvas.getContext('2d').drawImage(img, 0, 0)
+          const uiPicUrl = canvas.toDataURL('image/png', 1)
+          resolve(uiPicUrl)
+        }
+        img.onerror = () => {
+          reject('图片加载失败')
+        }
+        img.src = url
+      })
+    },
+
+    getImageSize(imgPath) {
+      return new Promise((resolve, reject) => {
+        const image = new Image()
+        image.src = imgPath
+        image.onload = (e) => {
+          resolve({ width: image.width, height: image.height })
+        };
+        image.onerror = (e) => {
+          reject(e)
+        };
+      });
+    },
+
+    toggleUiPicVisible() {
+      if (!this.coreData.uiPicUrl) {
+        return
+      }
+      this.coreData.uiPicVisible = !this.coreData.uiPicVisible
+    },
+
+    sleep(ms) {
+      return new Promise(resolve => {
+        setTimeout(() => {
+          resolve();
+        }, ms);
+      });
+    },
+
+    async runTest(uiPicUrl) {
+      // get ui picture width&height
+      const { width, height } = await this.getImageSize(uiPicUrl);
+      this.coreData.uiPicWidth = width;
+      this.coreData.uiPicHeight = height;
+
+      const tempPath = rubick.getPath('temp');
+      const screenshotsPath = tempPath + '/Screenshots.png';
+      const uiPicPath = tempPath + '/UiPic.png';
+      const diffResultPath = tempPath + '/DiffResult.png';
+      const vpWidth = 375;
+      const vpHeight = Math.floor((height - Number(this.coreData.uiPicStatusBarHeight)) * (vpWidth / width));
+      const dpr = 2;
+
+      console.log('launch start...')
+      // create puppeteer instance
+      const browser = await puppeteer.launch({
+        headless: true,
+        defaultViewport: {
+          width: vpWidth,
+          height: vpHeight,
+          deviceScaleFactor: dpr,
+          isMobile: true,
+          hasTouch: true
+        },
+        executablePath: this.coreData.chromePath
+      });
+      console.log('launch end...')
+      // new page
+      const page = await browser.newPage();
+      console.log('newPage...')
+      // open url
+      await page.goto(this.coreData.webUrl);
+      console.log('goPage...')
+      // delay 5s
+      await this.sleep(5000);
+      console.log('5s later...')
+      // save screenshot
+      await page.screenshot({ path: screenshotsPath, fullPage: true });
+      console.log('screenshot ok...')
+      await browser.close();
+      console.log('browser closed...')
+
+      // process and save ui picture
+      const base64Url = uiPicUrl.replace(/^data:image\/\w+;base64,/, '');
+      const dataBuffer = BufferClone.from(base64Url, 'base64');
+      const resizedUiPic = await sharp(dataBuffer)
+        .extract({ left: 0, top: Number(this.coreData.uiPicStatusBarHeight), width, height: height - Number(this.coreData.uiPicStatusBarHeight) })
+        .resize(vpWidth * dpr, vpHeight * dpr)
+        .png()
+        .toBuffer();
+      fs.writeFileSync(uiPicPath, resizedUiPic);
+
+      const diff = new BlinkDiff({
+        imageAPath: uiPicPath,
+        imageBPath: screenshotsPath,
+        threshold: 500,
+        thresholdType: BlinkDiff.THRESHOLD_PIXEL,
+        imageOutputPath: diffResultPath,
+        outputMaskRed: 255,
+        outputMaskGreen: 0,
+        outputMaskBlue: 99
+      });
+
+      diff.run(async (error, result) => {
+        if (error) {
+          throw error;
+        } else {
+          console.log(diff.hasPassed(result.code) ? '通过' : '失败');
+          this.coreData.scoreDesc = '总像素:' + result.dimension + '   ' + '发现:' + result.differences + '差异。';
+          const fileResult = await fs.readFileSync(diffResultPath);
+          this.coreData.resultPicUrl = `data:image/png;base64,${BufferClone.from(fileResult).toString('base64')}`;
+          this.coreData.score = Math.floor((100 * (result.dimension - result.differences)) / result.dimension);
+        }
+      });
+    },
+
+    removeUiPic() {
+      this.coreData.uiPicUrl = ''
+      this.coreData.uiPicWidth = 0
+      this.coreData.uiPicHeight = 0
+      this.coreData.resultPicUrl = ''
+      this.coreData.scoreDesc = ''
+      this.coreData.score = ''
+      this.$refs.fileForm.reset()
+    },
+
+    copy() {
+      rubick.copyImage(this.coreData.resultPicUrl);
+      rubick.showNotification('比对结果图片复制成功')
+    },
+
+    goBack() {
+      window.history.go(-1)
+    }
+  }).mount('#app')
+</script>
+
+<div id="app" @mounted="onMounted" v-cloak>
+  <!-- 输入蓝湖信息 -->
+  <section class="account common-wrap" v-show="visibility === ROUTE_NAME.account">
+    <header class="header">
+      <h1>MonaLisa</h1>
+      <div class="guide-tips">
+        <span>蓝湖信息</span>
+        <i class="arrow"></i>
+      </div>
+    </header>
+    <ul class="select-list">
+      <li class="select-item">
+        <div class="view">
+          <input class="input" type="text" placeholder="账号" v-model.trim="lanhuData.email">
+        </div>
+      </li>
+      <li class="select-item">
+        <div class="view">
+          <input class="input" type="password" placeholder="密码" v-model.trim="lanhuData.password">
+        </div>
+      </li>
+      <li class="select-item">
+        <div class="view">
+          <input class="input" type="text" placeholder="项目ID" v-model.trim="lanhuData.pid">
+        </div>
+      </li>
+      <div class="ctl-tips">*复制蓝湖项目页面完整url可自动识别</div>
+    </ul>
+    <footer class="footer" @click="loginLanhu">
+      <button class="btn-login">登录</button>
+    </footer>
+  </section>
+  <!-- 比对页面 -->
+  <section class="core" v-show="visibility === ROUTE_NAME.core">
+    <main class="frame">
+      <iframe
+        v-if="coreData.webUrl"
+        id="webview"
+        :src="coreData.webUrl"
+      ></iframe>
+      <div class="placeholder" v-else>
+        no data
+      </div>
+      <div
+        v-if="coreData.uiPicUrl"
+        class="pic-mask"
+        @mounted="bindDrag($el)"
+        @unmounted="unBindDrag($el)"
+        :style="{
+            top: coreData.uiPicMaskTop + 'px',
+            height: coreData.uiPicHeight + 'px',
+            backgroundImage: `url('${coreData.uiPicUrl}')`,
+            opacity: +coreData.uiPicOpacity / 100,
+            visibility: `${coreData.uiPicVisible ? 'visible' : 'hidden'}`
+          }"
+      ></div>
+    </main>
+    <aside class="operate">
+      <section>
+        <h5>页面url</h5>
+        <label class="form-item">
+          <input class="input" type="text" v-model.trim="coreData.preWebUrl" @keyup.enter="changeWebUrl">
+          <span class="input-button">
+          <button class="btn-submit" @click="changeWebUrl">确定</button>
+        </span>
+        </label>
+      </section>
+      <section v-if="coreData.webUrl">
+        <h5>设计稿状态栏高度(px)</h5>
+        <label class="form-item">
+          <input class="input" type="number" v-model.trim="coreData.uiPicStatusBarHeight" :disabled="!!coreData.uiPicUrl">
+        </label>
+      </section>
+      <section v-if="coreData.webUrl">
+        <h5>选择设计稿来源</h5>
+        <div class="radio-group">
+          <label class="radio-wrapper" @click="chooseUiPicOrigin('self')">
+            <span class="radio" :class="{ 'radio-checked': coreData.uiPicOrigin === 'self' }">
+              <span class="radio-inner"></span>
+              <input type="radio" class="radio-input" name="visible" >
+            </span>
+            <span>本地上传</span>
+          </label>
+          <label class="radio-wrapper" @click="chooseUiPicOrigin('lanhu')">
+            <span class="radio" :class="{ 'radio-checked': coreData.uiPicOrigin === 'lanhu' }">
+              <span class="radio-inner"></span>
+              <input type="radio" class="radio-input" name="visible" >
+            </span>
+            <span>蓝湖勾选</span>
+          </label>
+        </div>
+      </section>
+      <section v-if="coreData.webUrl">
+        <template v-if="!coreData.uiPicUrl && coreData.uiPicOrigin === 'self'">
+          <h5>上传设计稿</h5>
+          <label class="form-item">
+            <div class="upload">
+              <form ref="fileForm">
+                <input type="file" @change="fileChange($event)" >
+              </form>
+              <span class="slot">
+              <span>点击选择文件</span>
+            </span>
+            </div>
+          </label>
+        </template>
+        <template v-if="coreData.uiPicUrl">
+          <h5>预览图</h5>
+          <div class="form-item">
+            <div class="preview">
+              <img :src="coreData.uiPicUrl" alt="预览图">
+              <div class="button-wrap">
+                <div class="file-name">{{ coreData.uiPicName }}</div>
+                <button class="mono-btn" @click="removeUiPic">删除</button>
+              </div>
+            </div>
+          </div>
+        </template>
+      </section>
+      <section v-if="coreData.webUrl && coreData.uiPicUrl">
+        <h5>显示/隐藏设计稿</h5>
+        <div class="radio-group">
+          <label class="radio-wrapper" @click="coreData.uiPicVisible = true">
+            <span class="radio" :class="{ 'radio-checked': coreData.uiPicVisible }">
+              <span class="radio-inner"></span>
+              <input type="radio" class="radio-input" name="visible" >
+            </span>
+            <span>显示</span>
+          </label>
+          <label class="radio-wrapper" @click="coreData.uiPicVisible = false">
+            <span class="radio" :class="{ 'radio-checked': !coreData.uiPicVisible }">
+              <span class="radio-inner"></span>
+              <input type="radio" class="radio-input" name="visible" >
+            </span>
+            <span>隐藏</span>
+          </label>
+        </div>
+      </section>
+      <section v-if="coreData.webUrl && coreData.uiPicUrl">
+        <h5>设计稿透明度</h5>
+        <label class="form-item progress">
+          <input type="range" v-model="coreData.uiPicOpacity">
+          <span>{{ coreData.uiPicOpacity }}%</span>
+        </label>
+      </section>
+      <section class="result-wrap">
+        <template v-if="coreData.resultPicUrl">
+          <h5>自动比对结果</h5>
+          <img :src="coreData.resultPicUrl"/>
+          <button class="mono-btn copy-btn" @click="copy">复制结果图片</button>
+          <div>{{ coreData.scoreDesc }} 评分{{ coreData.score }}分</div>
+          <div class="tips">*评分仅供参考</div>
+        </template>
+      </section>
+    </aside>
+  </section>
+  <!-- 设计图备选列表 -->
+  <section class="ui-image" v-show="visibility === ROUTE_NAME.choose">
+    <h5 v-if="lanhuData.projectName">{{ lanhuData.projectName }}</h5>
+    <ul class="ui-image-list" v-if="lanhuData.images && lanhuData.images.length">
+      <li
+        class="ui-image-list-item"
+        v-for="(item, idx) in lanhuData.images"
+        @click="onUiPicChoose(item)"
+      >
+        <img :src="item.url" :alt="item.name">
+      </li>
+    </ul>
+    <div class="no-data" v-else>
+      <p>没有数据哦</p>
+      <button class="mono-btn" @click="goBack">返回</button>
+    </div>
+  </section>
+</div>

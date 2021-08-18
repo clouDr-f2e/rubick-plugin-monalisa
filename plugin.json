@@ -1,0 +1,17 @@
+{
+  "pluginName": "蒙娜丽莎",
+  "author": "xinma",
+  "description": "UI走查利器",
+  "main": "index.html",
+  "version": "0.0.6",
+  "logo": "logo.jpeg",
+  "name": "rubick-plugin-monalisa",
+  "features": [
+    {
+      "code": "index",
+      "explain": "视觉稿比对工具",
+      "cmds":["monalisa", "mengnalisha", "蒙娜丽莎", "视觉稿比对工具", "UI走查"]
+    }
+  ],
+  "preload": "preload.js"
+}
