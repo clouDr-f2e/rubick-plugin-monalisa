@@ -1,0 +1,31 @@
+{
+  "name": "rubick-plugin-monalisa",
+  "pluginName": "蒙娜丽莎",
+  "description": "UI走查利器",
+  "author": "xinma",
+  "main": "index.html",
+  "logo": "https://user-images.githubusercontent.com/20527751/164286257-6b26b05f-2c3b-4443-994a-ca5c09e6df7a.png",
+  "version": "0.0.5",
+  "preload": "preload.js",
+  "pluginType": "ui",
+  "features": [
+    {
+      "code": "index",
+      "explain": "视觉稿比对工具",
+      "cmds": [
+        "monalisa",
+        "mengnalisha",
+        "蒙娜丽莎",
+        "视觉稿比对工具",
+        "UI走查"
+      ]
+    }
+  ],
+  "devDependencies": {},
+  "dependencies": {
+    "blink-diff": "^1.0.13",
+    "false": "^0.0.4",
+    "gm": "^1.23.1",
+    "puppeteer-core": "^13.5.2"
+  }
+}

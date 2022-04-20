@@ -354,35 +354,41 @@
       // process and save ui picture
       const base64Url = uiPicUrl.replace(/^data:image\/\w+;base64,/, '');
       const dataBuffer = BufferClone.from(base64Url, 'base64');
-      const resizedUiPic = await sharp(dataBuffer)
-        .extract({ left: 0, top: Number(this.coreData.uiPicStatusBarHeight), width, height: height - Number(this.coreData.uiPicStatusBarHeight) })
+      console.log(uiPicUrl);
+      console.log(dataBuffer);
+      imageMagick(dataBuffer, 'uiPic.png')
+        .crop(width, height - Number(this.coreData.uiPicStatusBarHeight), 0, Number(this.coreData.uiPicStatusBarHeight))
         .resize(vpWidth * dpr, vpHeight * dpr)
-        .png()
-        .toBuffer();
-      fs.writeFileSync(uiPicPath, resizedUiPic);
+        .write(uiPicPath, (err) => {
+          if (err) {
+            console.log(err);
+            return;
+          }
+          console.log('done!');
 
-      const diff = new BlinkDiff({
-        imageAPath: uiPicPath,
-        imageBPath: screenshotsPath,
-        threshold: 500,
-        thresholdType: BlinkDiff.THRESHOLD_PIXEL,
-        imageOutputPath: diffResultPath,
-        outputMaskRed: 255,
-        outputMaskGreen: 0,
-        outputMaskBlue: 99
-      });
+          const diff = new BlinkDiff({
+            imageAPath: uiPicPath,
+            imageBPath: screenshotsPath,
+            threshold: 500,
+            thresholdType: BlinkDiff.THRESHOLD_PIXEL,
+            imageOutputPath: diffResultPath,
+            outputMaskRed: 255,
+            outputMaskGreen: 0,
+            outputMaskBlue: 99
+          });
 
-      diff.run(async (error, result) => {
-        if (error) {
-          throw error;
-        } else {
-          console.log(diff.hasPassed(result.code) ? '通过' : '失败');
-          this.coreData.scoreDesc = '总像素:' + result.dimension + '   ' + '发现:' + result.differences + '差异。';
-          const fileResult = await fs.readFileSync(diffResultPath);
-          this.coreData.resultPicUrl = `data:image/png;base64,${BufferClone.from(fileResult).toString('base64')}`;
-          this.coreData.score = Math.floor((100 * (result.dimension - result.differences)) / result.dimension);
-        }
-      });
+          diff.run(async (error, result) => {
+            if (error) {
+              throw error;
+            } else {
+              console.log(diff.hasPassed(result.code) ? '通过' : '失败');
+              this.coreData.scoreDesc = '总像素:' + result.dimension + '   ' + '发现:' + result.differences + '差异。';
+              const fileResult = await fs.readFileSync(diffResultPath);
+              this.coreData.resultPicUrl = `data:image/png;base64,${BufferClone.from(fileResult).toString('base64')}`;
+              this.coreData.score = Math.floor((100 * (result.dimension - result.differences)) / result.dimension);
+            }
+          });
+        });
     },
 
     removeUiPic() {
@@ -406,7 +412,7 @@
   }).mount('#app')
 </script>
 
-<div id="app" @mounted="onMounted" v-cloak>
+<div id="app" @vue:mounted="onMounted" v-cloak>
   <!-- 输入蓝湖信息 -->
   <section class="account common-wrap" v-show="visibility === ROUTE_NAME.account">
     <header class="header">
@@ -452,8 +458,8 @@
       <div
         v-if="coreData.uiPicUrl"
         class="pic-mask"
-        @mounted="bindDrag($el)"
-        @unmounted="unBindDrag($el)"
+        @vue:mounted="bindDrag($el)"
+        @vue:unmounted="unBindDrag($el)"
         :style="{
             top: coreData.uiPicMaskTop + 'px',
             height: coreData.uiPicHeight + 'px',

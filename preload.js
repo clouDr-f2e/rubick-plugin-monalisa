@@ -1,10 +1,10 @@
-const puppeteer = require('puppeteer-core');
-const sharp = require('sharp');
+const puppeteerCore = require('puppeteer-core');
+const gm = require('gm');
 const fs = require('fs');
-const BlinkDiff = require('./lib/blink-diff/index');
+const BlinkDiff = require('blink-diff');
 
-window.puppeteer = puppeteer;
-window.sharp = sharp;
+window.puppeteer = puppeteerCore;
+window.imageMagick = gm.subClass({imageMagick:true });
 window.BufferClone = Buffer;
 window.fs = fs;
 window.BlinkDiff = BlinkDiff;
